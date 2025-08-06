@@ -7,10 +7,6 @@ const router = createRouter({
   routes: [
     {
       path: '/',
-      redirect: '/clansTime',
-    },
-    {
-      path: '/clansTime',
       name: 'clansTime',
       component: ClansTime,
     },
