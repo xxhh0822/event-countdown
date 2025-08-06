@@ -3,7 +3,6 @@
     <el-header class="header">
       <span/>
       <div class="header-buttons">
-        <el-button @click="openDataManager">数据管理</el-button>
         <el-button @click="openTagManager">标签管理</el-button>
         <el-button type="primary" @click="openAddDialog">添加新事件</el-button>
       </div>
@@ -78,41 +77,56 @@
           </div>
         </el-form-item>
         <el-form-item label="设置时长">
-          <div class="scroll-picker-container">
-            <div class="scroll-picker-column">
-              <ul ref="daysPicker" @scroll="handleScroll('days', $event)">
-                <li v-for="n in 366" :key="n">{{ n - 1 }}</li>
-              </ul>
-              <div class="highlight"></div>
-              <span>天</span>
+          <div class="time-input-container">
+            <div class="time-input-group">
+              <el-input
+                v-model.number="eventForm.days"
+                type="number"
+                min="0"
+                max="365"
+                placeholder="天数"
+                class="time-input"
+                @input="onTimeInput('days')"
+              />
+              <span class="time-label">天</span>
             </div>
-            <div class="scroll-picker-column">
-              <ul ref="hoursPicker" @scroll="handleScroll('hours', $event)">
-                <li v-for="n in 25" :key="n">{{ n - 1 }}</li>
-              </ul>
-              <div class="highlight"></div>
-              <span>时</span>
+            <div class="time-input-group">
+              <el-input
+                v-model.number="eventForm.hours"
+                type="number"
+                min="0"
+                max="24"
+                placeholder="小时"
+                class="time-input"
+                @input="onTimeInput('hours')"
+              />
+              <span class="time-label">时</span>
             </div>
-            <div class="scroll-picker-column">
-              <ul ref="minutesPicker" @scroll="handleScroll('minutes', $event)">
-                <li v-for="n in 61" :key="n">{{ n - 1 }}</li>
-              </ul>
-              <div class="highlight"></div>
-              <span>分</span>
+            <div class="time-input-group">
+              <el-input
+                v-model.number="eventForm.minutes"
+                type="number"
+                min="0"
+                max="60"
+                placeholder="分钟"
+                class="time-input"
+                @input="onTimeInput('minutes')"
+              />
+              <span class="time-label">分</span>
             </div>
           </div>
         </el-form-item>
       </el-form>
       <template #footer>
         <span class="dialog-footer">
-          <el-button @click="dialogVisible = false">取消</el-button>
+          <el-button @click="closeDialog">取消</el-button>
           <el-button type="primary" @click="saveEvent">保存</el-button>
         </span>
       </template>
     </el-dialog>
 
     <!-- 标签管理对话框 -->
-    <el-dialog v-model="tagManagerVisible" title="标签管理" width="600px">
+    <el-dialog v-model="tagManagerVisible" title="标签管理" width="90%">
       <div class="tag-manager">
         <div class="tag-manager-section">
           <h4>添加新标签</h4>
@@ -120,9 +134,8 @@
             <el-input 
               v-model="newTagName" 
               placeholder="输入标签名称"
-              style="width: 200px; margin-right: 10px;"
             />
-            <el-select v-model="newTagType" placeholder="选择标签类型" style="width: 120px; margin-right: 10px;">
+            <el-select v-model="newTagType" placeholder="选择标签类型">
               <el-option label="主要" value="primary" />
               <el-option label="成功" value="success" />
               <el-option label="信息" value="info" />
@@ -135,7 +148,10 @@
 
         <div class="tag-manager-section">
           <h4>现有标签</h4>
-          <div class="tag-list">
+          <div v-if="allTags.length === 0" class="no-tags">
+            <p>暂无标签，请添加第一个标签</p>
+          </div>
+          <div v-else class="tag-list">
             <div v-for="tag in allTags" :key="tag.name" class="tag-item">
               <el-tag :type="tag.type" size="large">{{ tag.name }}</el-tag>
               <div class="tag-actions">
@@ -148,7 +164,7 @@
       </div>
 
       <!-- 编辑标签对话框 -->
-      <el-dialog v-model="editTagVisible" title="编辑标签" width="400px" append-to-body>
+      <el-dialog v-model="editTagVisible" title="编辑标签" width="90%" append-to-body>
         <el-form :model="editingTag" label-width="80px">
           <el-form-item label="标签名称">
             <el-input v-model="editingTag.name" />
@@ -207,9 +223,7 @@ const countdowns = reactive<Record<number, Countdown>>({});
 const dialogVisible = ref(false);
 const tagManagerVisible = ref(false);
 const editTagVisible = ref(false);
-const daysPicker = ref<HTMLElement | null>(null);
-const hoursPicker = ref<HTMLElement | null>(null);
-const minutesPicker = ref<HTMLElement | null>(null);
+
 const isEditing = ref(false);
 const sortKey = ref<'remainingTime' | 'creationDate'>('remainingTime');
 
@@ -229,18 +243,7 @@ const editingTag = reactive<Tag>({ name: '', type: 'primary' });
 const originalTagName = ref('');
 
 // 标签数据
-const tags = ref<Tag[]>([
-  { name: '工作', type: 'primary' },
-  { name: '学习', type: 'success' },
-  { name: '生活', type: 'info' },
-  { name: '娱乐', type: 'warning' },
-  { name: '健康', type: 'success' },
-  { name: '旅行', type: 'warning' },
-  { name: '生日', type: 'danger' },
-  { name: '纪念日', type: 'danger' },
-  { name: '考试', type: 'warning' },
-  { name: '会议', type: 'primary' }
-]);
+const tags = ref<Tag[]>([]);
 
 // 获取所有可用标签名称
 const availableTags = computed(() => {
@@ -328,13 +331,26 @@ const saveTagEdit = () => {
 };
 
 const deleteTag = (tagName: string) => {
+  // 检查是否有事件正在使用该标签
+  const eventsUsingTag = events.value.filter(event => event.tags.includes(tagName));
+  
+  let message = `确定要删除标签"<strong>${tagName}</strong>"吗？`;
+  
+  if (eventsUsingTag.length > 0) {
+    const eventNames = eventsUsingTag.map(event => event.name).join('、');
+    message += `<br><br><span style="color: #e6a23c;">⚠️ 警告：以下事件正在使用此标签：</span><br><span style="color: #606266; font-size: 14px;">${eventNames}</span><br><br>删除后，这些事件将不再显示该标签。`;
+  } else {
+    message += '<br><br>删除后，所有使用该标签的事件将不再显示该标签。';
+  }
+  
   ElMessageBox.confirm(
-    `确定要删除标签"${tagName}"吗？删除后，所有使用该标签的事件将不再显示该标签。`,
+    message,
     '删除标签',
     {
-      confirmButtonText: '确定',
+      confirmButtonText: '确定删除',
       cancelButtonText: '取消',
-      type: 'warning',
+      type: eventsUsingTag.length > 0 ? 'warning' : 'info',
+      dangerouslyUseHTMLString: true,
     }
   ).then(() => {
     // 从标签列表中删除
@@ -412,15 +428,43 @@ const updateAllCountdowns = () => {
 
 let timer: number;
 
+// 动态设置容器高度
+const setContainerHeight = () => {
+  const vh = window.innerHeight * 0.01;
+  document.documentElement.style.setProperty('--vh', `${vh}px`);
+};
+
+const closeDialog = () => {
+  dialogVisible.value = false;
+  setTimeout(() => {
+    setContainerHeight();
+    window.scrollTo(0, 0);
+    const active = document.activeElement as HTMLElement | null;
+    if (active && typeof active.blur === 'function') {
+      active.blur();
+    }
+  }, 100);
+};
+
 onMounted(() => {
   loadTags();
   loadEvents();
   updateAllCountdowns();
   timer = window.setInterval(updateAllCountdowns, 1000);
+  
+  // 设置初始高度
+  setContainerHeight();
+  
+  // 监听窗口大小变化
+  window.addEventListener('resize', setContainerHeight);
+  window.addEventListener('orientationchange', () => {
+    setTimeout(setContainerHeight, 100);
+  });
 });
 
 onUnmounted(() => {
   clearInterval(timer);
+  window.removeEventListener('resize', setContainerHeight);
 });
 
 const sortedEvents = computed(() => {
@@ -444,13 +488,7 @@ const openAddDialog = () => {
   dialogVisible.value = true;
 };
 
-const handleScroll = (type: 'days' | 'hours' | 'minutes', event: Event) => {
-  const target = event.target as HTMLElement;
-  const scrollTop = target.scrollTop;
-  const itemHeight = target.querySelector('li')?.offsetHeight || 40;
-  const selectedIndex = Math.round(scrollTop / itemHeight);
-  eventForm[type] = selectedIndex;
-};
+
 
 const editEvent = (event: CountdownEvent) => {
   isEditing.value = true;
@@ -474,16 +512,17 @@ const editEvent = (event: CountdownEvent) => {
   }
 
   dialogVisible.value = true;
-
-  nextTick(() => {
-    const itemHeight = 40;
-    if (daysPicker.value) daysPicker.value.scrollTop = eventForm.days * itemHeight;
-    if (hoursPicker.value) hoursPicker.value.scrollTop = eventForm.hours * itemHeight;
-    if (minutesPicker.value) minutesPicker.value.scrollTop = eventForm.minutes * itemHeight;
-  });
 };
 
 const saveEvent = () => {
+  // 修正输入范围
+  if (eventForm.days < 0) eventForm.days = 0;
+  if (eventForm.days > 365) eventForm.days = 365;
+  if (eventForm.hours < 0) eventForm.hours = 0;
+  if (eventForm.hours > 24) eventForm.hours = 24;
+  if (eventForm.minutes < 0) eventForm.minutes = 0;
+  if (eventForm.minutes > 60) eventForm.minutes = 60;
+
   if (!eventForm.name) {
     ElMessage.error('请填写事件名称');
     return;
@@ -523,7 +562,7 @@ const saveEvent = () => {
   
   persistEvents();
   updateAllCountdowns();
-  dialogVisible.value = false;
+  closeDialog();
   ElMessage.success('保存成功！');
 };
 
@@ -543,60 +582,50 @@ const deleteEvent = (id: number) => {
       // 取消删除
     });
 };
+
+const onTimeInput = (type: 'days' | 'hours' | 'minutes') => {
+  if (type === 'days') {
+    if (eventForm.days < 0) eventForm.days = 0;
+    if (eventForm.days > 365) eventForm.days = 365;
+  } else if (type === 'hours') {
+    if (eventForm.hours < 0) eventForm.hours = 0;
+    if (eventForm.hours > 24) eventForm.hours = 24;
+  } else if (type === 'minutes') {
+    if (eventForm.minutes < 0) eventForm.minutes = 0;
+    if (eventForm.minutes > 60) eventForm.minutes = 60;
+  }
+};
 </script>
 
 <style scoped>
-.scroll-picker-container {
+.time-input-container {
   display: flex;
   justify-content: center;
-  gap: 10px;
+  gap: 15px;
   width: 100%;
   padding: 0 20px;
 }
-.scroll-picker-column {
-  position: relative;
+.time-input-group {
   display: flex;
+  flex-direction: column;
   align-items: center;
+  gap: 8px;
 }
-.scroll-picker-column ul {
-  height: 200px; /* 5 items * 40px */
-  width: 60px;
-  overflow-y: scroll;
-  list-style: none;
-  padding: 80px 0; /* 2 items * 40px padding top/bottom */
-  margin: 0;
-  scroll-snap-type: y mandatory;
-  -ms-overflow-style: none;  /* IE and Edge */
-  scrollbar-width: none;  /* Firefox */
+.time-input {
+  width: 120px;
 }
-.scroll-picker-column ul::-webkit-scrollbar {
-  display: none; /* Chrome, Safari, Opera */
-}
-.scroll-picker-column li {
-  height: 40px;
-  line-height: 40px;
-  text-align: center;
-  font-size: 20px;
-  scroll-snap-align: center;
-}
-.scroll-picker-column .highlight {
-  position: absolute;
-  top: 50%;
-  left: 0;
-  transform: translateY(-50%);
-  height: 40px;
-  width: 60px;
-  border-top: 1px solid #dcdfe6;
-  border-bottom: 1px solid #dcdfe6;
-  pointer-events: none; /* Allows scrolling through the highlight */
-}
-.scroll-picker-column span {
-  margin-left: 8px;
-  font-size: 16px;
+.time-label {
+  font-size: 14px;
+  color: #606266;
+  font-weight: 500;
 }
 
 .container {
-  height: 100vh;
+  height: 100vh; /* fallback */
+  height: calc(var(--vh, 1vh) * 100);
+  min-height: calc(var(--vh, 1vh) * 100);
+  max-height: calc(var(--vh, 1vh) * 100);
+  overflow: hidden;
 }
 .header {
   display: flex;
@@ -682,6 +711,12 @@ const deleteEvent = (id: number) => {
   align-items: center;
   gap: 10px;
 }
+.add-tag-form .el-input {
+  width: 200px;
+}
+.add-tag-form .el-select {
+  width: 120px;
+}
 .tag-list {
   display: flex;
   flex-wrap: wrap;
@@ -699,5 +734,178 @@ const deleteEvent = (id: number) => {
 .tag-actions {
   display: flex;
   gap: 5px;
+}
+.no-tags {
+  text-align: center;
+  color: #909399;
+  padding: 20px;
+  background-color: #fafafa;
+  border-radius: 6px;
+  border: 1px dashed #dcdfe6;
+}
+
+/* 移动端适配 */
+@media (max-width: 768px) {
+  .container {
+    height: 100vh; /* fallback */
+    height: calc(var(--vh, 1vh) * 100);
+    min-height: calc(var(--vh, 1vh) * 100);
+    max-height: calc(var(--vh, 1vh) * 100);
+    overflow: hidden;
+  }
+  
+  .header {
+    padding: 10px 15px;
+    min-height: 60px;
+  }
+  
+  .header-buttons {
+    gap: 8px;
+  }
+  
+  .header-buttons .el-button {
+    font-size: 14px;
+    padding: 8px 12px;
+  }
+  
+  .el-main {
+    padding: 15px;
+    overflow-y: auto;
+    height: calc(calc(var(--vh, 1vh) * 100) - 60px);
+  }
+  
+  .box-card {
+    margin-bottom: 15px;
+    min-width: auto;
+  }
+  
+  .card-header {
+    flex-direction: column;
+    gap: 10px;
+    align-items: flex-start;
+  }
+  
+  .countdown {
+    gap: 8px;
+    font-size: 20px;
+  }
+  
+  .time-block {
+    padding: 8px;
+    min-width: 50px;
+  }
+  
+  .time-block span {
+    font-size: 10px;
+  }
+  
+  /* 对话框移动端适配 */
+  .el-dialog {
+    margin: 10px !important;
+    width: calc(100% - 20px) !important;
+    max-width: none !important;
+  }
+  
+  .el-dialog__body {
+    padding: 15px;
+  }
+  
+  /* 时间输入框移动端适配 */
+  .time-input-container {
+    padding: 0 10px;
+    gap: 10px;
+  }
+  
+  .time-input-group {
+    gap: 5px;
+  }
+  
+  .time-input {
+    width: 80px;
+  }
+  
+  .time-label {
+    font-size: 12px;
+  }
+  
+  /* 标签管理移动端适配 */
+  .tag-manager {
+    padding: 15px 0;
+  }
+  
+  .tag-manager-section {
+    margin-bottom: 20px;
+  }
+  
+  .tag-manager-section h4 {
+    margin-bottom: 10px;
+    font-size: 16px;
+  }
+  
+  .add-tag-form {
+    flex-direction: column;
+    gap: 10px;
+  }
+  
+  .add-tag-form .el-input,
+  .add-tag-form .el-select {
+    width: 100% !important;
+    margin-right: 0 !important;
+  }
+  
+  .add-tag-form .el-button {
+    width: 100%;
+    margin-top: 5px;
+  }
+  
+  .tag-list {
+    gap: 10px;
+  }
+  
+  .tag-item {
+    flex-direction: column;
+    gap: 8px;
+    padding: 8px;
+    width: 100%;
+  }
+  
+  .tag-actions {
+    width: 100%;
+    justify-content: center;
+  }
+  
+  .tag-actions .el-button {
+    flex: 1;
+    max-width: 80px;
+  }
+}
+
+/* 防止虚拟键盘弹出时页面缩放 */
+@media screen and (max-width: 768px) {
+  body {
+    position: fixed;
+    width: 100%;
+    height: 100%;
+    overflow: hidden;
+  }
+  
+  #app {
+    height: calc(var(--vh, 1vh) * 100);
+    overflow: hidden;
+  }
+  
+  .el-dialog__wrapper {
+    position: fixed !important;
+    top: 0 !important;
+    left: 0 !important;
+    right: 0 !important;
+    bottom: 0 !important;
+  }
+  
+  /* 对话框内容区域高度适配 */
+  .el-dialog__body {
+    max-height: calc(calc(var(--vh, 1vh) * 100) - 120px);
+    overflow-y: auto;
+  }
 }
 </style>

@@ -33,3 +33,19 @@ a,
     padding: 0 2rem;
   }
 }
+
+/* 移动端适配 */
+@media (max-width: 768px) {
+  body {
+    display: block;
+    place-items: initial;
+  }
+
+  #app {
+    display: block;
+    grid-template-columns: none;
+    padding: 0;
+    max-width: 100%;
+    margin: 0;
+  }
+}
