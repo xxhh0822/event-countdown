@@ -1,5 +1,5 @@
 <template>
-  <el-container style="height: 100vh;">
+  <el-container style="height: 100vh; height: calc(var(--vh, 1vh) * 100);">
     <el-header height="56px">
       <el-tabs v-model="activeModule" type="card" stretch>
         <el-tab-pane
@@ -34,7 +34,7 @@
         </el-row>
       </el-card>
     </el-main>
-    <el-footer height="56px">
+    <el-footer height="56px" style="position: relative; z-index: 1000; background: #fff; border-top: 1px solid #ebeef5;">
       <el-button type="primary" @click="openModuleManager" style="width: 100%;">模块管理</el-button>
     </el-footer>
     <!-- 模块管理弹窗 -->
@@ -173,7 +173,23 @@ function initTimer(id: number): Timer {
 // 倒计时逻辑
 const currentTime = ref(Date.now());
 let timerInterval: number;
+
+// 移动端视口高度处理
+const setContainerHeight = () => {
+  const vh = window.innerHeight * 0.01;
+  document.documentElement.style.setProperty('--vh', `${vh}px`);
+};
+
 onMounted(() => {
+  // 设置初始高度
+  setContainerHeight();
+  
+  // 监听窗口大小变化
+  window.addEventListener('resize', setContainerHeight);
+  window.addEventListener('orientationchange', () => {
+    setTimeout(setContainerHeight, 100);
+  });
+  
   timerInterval = window.setInterval(() => {
     currentTime.value = Date.now();
   }, 1000);
