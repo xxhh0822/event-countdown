@@ -53,8 +53,50 @@
           <el-col :span="24" v-for="(module, idx) in modules" :key="module.id">
             <el-card shadow="always" style="margin-bottom: 16px;">
               <div style="display:flex; justify-content:space-between; align-items:center;">
-                <span>{{ module.name }}</span>
-                <el-button size="small" type="danger" @click="deleteModule(idx)">删除</el-button>
+                <div style="display:flex; align-items:center; gap:8px; flex:1;">
+                  <span v-if="!module.isEditing">{{ module.name }}</span>
+                  <el-input 
+                    v-else
+                    v-model="module.editName"
+                    size="small"
+                    style="flex:1;"
+                    @keyup.enter="saveModuleName(idx)"
+                    @blur="saveModuleName(idx)"
+                  />
+                </div>
+                <div style="display:flex; gap:8px;">
+                  <el-button 
+                    v-if="!module.isEditing"
+                    size="small" 
+                    type="primary" 
+                    @click="startEditModule(idx)"
+                  >
+                    编辑
+                  </el-button>
+                  <el-button 
+                    v-else
+                    size="small" 
+                    type="success" 
+                    @click="saveModuleName(idx)"
+                  >
+                    保存
+                  </el-button>
+                  <el-button 
+                    v-if="!module.isEditing"
+                    size="small" 
+                    type="danger" 
+                    @click="deleteModule(idx)"
+                  >
+                    删除
+                  </el-button>
+                  <el-button 
+                    v-else
+                    size="small" 
+                    @click="cancelEditModule(idx)"
+                  >
+                    取消
+                  </el-button>
+                </div>
               </div>
             </el-card>
           </el-col>
@@ -102,6 +144,8 @@ interface ClanModule {
   id: number;
   name: string;
   timers: Timer[];
+  isEditing?: boolean;
+  editName?: string;
 }
 const STORAGE_KEY = 'clansTime-modules';
 function loadModules(): ClanModule[] {
@@ -131,7 +175,7 @@ function addModule() {
   modules.value.push(initModule(newModuleName.value.trim()));
   newModuleName.value = '';
   ElMessage.success('模块已添加');
-  // 不关闭弹窗
+  moduleManagerVisible.value = false;
 }
 function deleteModule(idx: number) {
   ElMessageBox.confirm(
@@ -145,6 +189,7 @@ function deleteModule(idx: number) {
   ).then(() => {
     modules.value.splice(idx, 1);
     ElMessage.success('模块已删除');
+    moduleManagerVisible.value = false;
   }).catch(() => {
     // 用户取消，无操作
   });
@@ -242,4 +287,42 @@ function saveTimerEdit() {
 function openModuleManager() {
   moduleManagerVisible.value = true;
 }
+
+// 开始编辑模块名称
+const startEditModule = (idx: number) => {
+  const module = modules.value[idx];
+  module.isEditing = true;
+  module.editName = module.name;
+};
+
+// 保存模块名称
+const saveModuleName = (idx: number) => {
+  const module = modules.value[idx];
+  const newName = module.editName?.trim();
+  
+  if (!newName) {
+    ElMessage.error('模块名称不能为空');
+    return;
+  }
+  
+  // 检查名称是否重复
+  const existingModule = modules.value.find((m, i) => i !== idx && m.name === newName);
+  if (existingModule) {
+    ElMessage.error('模块名称已存在');
+    return;
+  }
+  
+  module.name = newName;
+  module.isEditing = false;
+  module.editName = '';
+  ElMessage.success('模块名称已更新');
+  moduleManagerVisible.value = false;
+};
+
+// 取消编辑模块名称
+const cancelEditModule = (idx: number) => {
+  const module = modules.value[idx];
+  module.isEditing = false;
+  module.editName = '';
+};
 </script> 
