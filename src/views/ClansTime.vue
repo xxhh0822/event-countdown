@@ -17,8 +17,8 @@
           <el-col :span="24" v-for="timer in sortedTimers(currentModule.timers)" :key="timer.id">
             <el-card style="margin-bottom: 12px;">
               <div style="display:flex; align-items:center; justify-content:space-between;">
-                <div style="display:flex; align-items:center; gap:16px;">
-                  <span>{{ formatTimer(timer) }}</span>
+                <span style="flex: 1;">{{ formatTimer(timer) }}</span>
+                <div style="display:flex; align-items:center; gap:8px;">
                   <el-button
                     v-if="timer.remark"
                     type="primary"
@@ -26,8 +26,8 @@
                     disabled
                     style="pointer-events: none; cursor: default;"
                   >{{ timer.remark }}</el-button>
+                  <el-button size="small" @click="editTimer(timer.id)">编辑</el-button>
                 </div>
-                <el-button size="small" @click="editTimer(timer.id)">编辑</el-button>
               </div>
             </el-card>
           </el-col>
